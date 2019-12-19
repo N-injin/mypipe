@@ -1,8 +1,9 @@
 extern crate clap;
 use clap::{App, Arg};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::io::Result;
 
-fn main() {
+fn main() -> Result<()> {
     let matches = App::new("MyPipe")
         .version("1.0")
         .about("Pipe operator implementation")
@@ -27,9 +28,27 @@ fn main() {
         )
         .get_matches();
 
-        let input_command = matches.value_of("in").unwrap();
-        let output_command = matches.value_of("out").unwrap();
+        let input_command_string = matches.value_of("in").unwrap();
+        let output_command_string = matches.value_of("out").unwrap();
 
+        let input_command = Command::new("sh")
+                                    .arg("-c")
+                                    .arg(input_command_string)
+                                    .stdout(Stdio::piped())
+                                    .spawn()?;
 
-        println!("Input : {} \nOutput : {}", input_command, output_command);
+        let output_command = Command::new("sh")
+                                     .arg("-c")
+                                     .arg(output_command_string)
+                                     .stdin(input_command.stdout.unwrap())
+                                     .output()
+                                     .expect("Failed to execute process");
+
+        if !output_command.status.success() {
+            println!("{}{}", String::from_utf8_lossy(&output_command.stderr), output_command.status);
+            std::process::exit(output_command.status.code().unwrap());
+        }
+
+        println!("{}", String::from_utf8_lossy(&output_command.stdout));
+        Ok(())
 }
